@@ -1,0 +1,40 @@
+name: Test service account key base64 decoding
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Prepare base64-encoded key
+        id: prep
+        run: |
+          # Create a fake service account JSON and base64-encode it
+          KEY_JSON='{"type":"service_account","project_id":"my-project","client_email":"sa@my-project.iam.gserviceaccount.com"}'
+          ENCODED=$(echo -n "$KEY_JSON" | base64 -w 0)
+          echo "encoded=$ENCODED" >> $GITHUB_OUTPUT
+          echo "expected=$KEY_JSON" >> $GITHUB_OUTPUT
+      - id: action
+        uses: .
+        with:
+          service_account_email: sa@my-project.iam.gserviceaccount.com
+          service_account_key: ${{ steps.prep.outputs.encoded }}
+          project_id: my-project
+      - name: Assert client-secret.json contains decoded key content
+        env:
+          EXPECTED: '{"type":"service_account","project_id":"my-project","client_email":"sa@my-project.iam.gserviceaccount.com"}'
+        run: |
+          # Give the async writeFile a moment to complete
+          sleep 1
+          if [ ! -f "./client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          ACTUAL=$(cat ./client-secret.json)
+          echo "actual: $ACTUAL"
+          echo "expected: $EXPECTED"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: decoded content does not match expected"
+            exit 1
+          fi
+          echo "PASS: client-secret.json contains correctly decoded key"

@@ -1,0 +1,24 @@
+name: Test basic usage - write client-secret.json
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@example-project.iam.gserviceaccount.com
+          service_account_key: eyJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsICJwcm9qZWN0X2lkIjogImV4YW1wbGUtcHJvamVjdCJ9
+          project_id: example-project
+      - name: Assert client-secret.json was written
+        run: |
+          # Give the async writeFile a moment to complete
+          sleep 1
+          if [ ! -f "./client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists"
+          cat ./client-secret.json
