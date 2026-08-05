@@ -1,6 +1,16 @@
 {
   "owner": "zxyle",
   "repo": "publish-gae-action",
-  "version": "",
-  "url": "https://github.com/zxyle/publish-gae-action"
+  "version": "v2.2",
+  "commit_sha": "f21469c3d0654cee8a62ae86efdd9d776d063ed2",
+  "url": "https://github.com/zxyle/publish-gae-action",
+  "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",
+  "test_policy_sha": "843adf9e4b8f85d0c08b27b9d0b09dd094b54702",
+  "test_agent_version": "2",
+  "harden_agent_version": "2",
+  "node_artifact": {
+    "gcs_uri": "gs://prod-actions-node-artifacts/node-artifacts/zxyle/publish-gae-action/v2.2/sha256-ef761411582213fd860ba0f42b3cb171218be23a17d2949535d59f57a0519fa6.tar.gz",
+    "sha256": "ef761411582213fd860ba0f42b3cb171218be23a17d2949535d59f57a0519fa6",
+    "size_bytes": 180231
+  }
 }

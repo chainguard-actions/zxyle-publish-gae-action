@@ -1,0 +1,65 @@
+name: Test gae_variables merging into app.yaml
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create app.yaml in workspace
+        run: |
+          cat > "$GITHUB_WORKSPACE/app.yaml" <<'EOF'
+          runtime: nodejs16
+          env: standard
+          env_variables:
+            EXISTING_VAR: existing_value
+          EOF
+
+      - name: Prepare inputs
+        id: prep
+        run: |
+          # Create a minimal fake service account JSON and base64-encode it
+          FAKE_KEY='{"type":"service_account","project_id":"my-project","private_key_id":"key123","client_email":"test@my-project.iam.gserviceaccount.com","client_id":"123456789","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token"}'
+          ENCODED_KEY=$(echo -n "$FAKE_KEY" | base64 -w 0)
+          echo "encoded_key=$ENCODED_KEY" >> "$GITHUB_OUTPUT"
+
+          # Create gae_variables JSON and base64-encode it
+          GAE_VARS='{"env_variables":{"MY_SECRET":"super_secret_value","DB_HOST":"localhost"}}'
+          ENCODED_VARS=$(echo -n "$GAE_VARS" | base64 -w 0)
+          echo "encoded_vars=$ENCODED_VARS" >> "$GITHUB_OUTPUT"
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@my-project.iam.gserviceaccount.com
+          service_account_key: ${{ steps.prep.outputs.encoded_key }}
+          project_id: my-project
+          gae_variables: ${{ steps.prep.outputs.encoded_vars }}
+
+      - name: Assert app.yaml was updated with merged variables
+        run: |
+          CONTENT=$(cat "$GITHUB_WORKSPACE/app.yaml")
+          echo "app.yaml content:"
+          echo "$CONTENT"
+          if ! echo "$CONTENT" | grep -q "MY_SECRET"; then
+            echo "FAIL: app.yaml does not contain MY_SECRET from gae_variables"
+            exit 1
+          fi
+          if ! echo "$CONTENT" | grep -q "super_secret_value"; then
+            echo "FAIL: app.yaml does not contain super_secret_value from gae_variables"
+            exit 1
+          fi
+          if ! echo "$CONTENT" | grep -q "DB_HOST"; then
+            echo "FAIL: app.yaml does not contain DB_HOST from gae_variables"
+            exit 1
+          fi
+          echo "PASS: app.yaml was correctly updated with gae_variables"
+
+      - name: Assert client-secret.json was created
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists"
