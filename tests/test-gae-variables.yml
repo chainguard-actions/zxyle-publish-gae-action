@@ -1,0 +1,55 @@
+name: Test gae_variables merging
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create app.yaml in workspace
+        run: |
+          cat > ./app.yaml << 'EOF'
+          runtime: nodejs14
+          service: default
+          env_variables:
+            EXISTING_VAR: "original"
+          EOF
+
+      - name: Prepare gae_variables (base64-encoded JSON)
+        id: vars
+        run: |
+          # JSON to merge: add env_variables.SECRET_KEY
+          JSON='{"env_variables":{"SECRET_KEY":"my-secret-value"}}'
+          ENCODED=$(echo -n "$JSON" | base64 -w 0)
+          echo "encoded=$ENCODED" >> $GITHUB_OUTPUT
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@example-project.iam.gserviceaccount.com
+          service_account_key: eyJrZXkiOiAiZmFrZSJ9
+          project_id: example-project
+          gae_variables: ${{ steps.vars.outputs.encoded }}
+
+      - name: Assert app.yaml contains merged variable
+        run: |
+          echo "Contents of app.yaml:"
+          cat ./app.yaml
+          if ! grep -q "SECRET_KEY" ./app.yaml; then
+            echo "FAIL: SECRET_KEY not found in app.yaml after merge"
+            exit 1
+          fi
+          if ! grep -q "my-secret-value" ./app.yaml; then
+            echo "FAIL: my-secret-value not found in app.yaml after merge"
+            exit 1
+          fi
+          echo "PASS: gae_variables merged successfully"
+
+      - name: Assert original variable still present
+        run: |
+          if ! grep -q "EXISTING_VAR" ./app.yaml; then
+            echo "FAIL: EXISTING_VAR was lost after merge"
+            exit 1
+          fi
+          echo "PASS: original variable preserved"

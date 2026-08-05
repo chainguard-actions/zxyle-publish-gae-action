@@ -1,0 +1,48 @@
+name: Test custom gae_config_path
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create custom app config at non-default path
+        run: |
+          mkdir -p ./config
+          cat > ./config/app.yaml << 'EOF'
+          runtime: python39
+          service: api
+          env_variables:
+            API_VERSION: "v2"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@example-project.iam.gserviceaccount.com
+          service_account_key: eyJrZXkiOiAiZmFrZSJ9
+          project_id: example-project
+          gae_config_path: ./config/app.yaml
+
+      - name: Assert custom config was read (action did not fail)
+        run: |
+          if [ ! -f "./config/app.yaml" ]; then
+            echo "FAIL: custom app.yaml not found"
+            exit 1
+          fi
+          echo "Contents of custom app.yaml:"
+          cat ./config/app.yaml
+          if ! grep -q "python39" ./config/app.yaml; then
+            echo "FAIL: expected runtime python39 in config"
+            exit 1
+          fi
+          echo "PASS: custom gae_config_path used successfully"
+
+      - name: Assert client-secret.json was written
+        run: |
+          if [ ! -f "./client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists"

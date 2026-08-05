@@ -1,0 +1,40 @@
+name: Test basic usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create app.yaml in workspace
+        run: |
+          cat > ./app.yaml << 'EOF'
+          runtime: nodejs14
+          service: default
+          env_variables:
+            MY_VAR: "hello"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@example-project.iam.gserviceaccount.com
+          service_account_key: eyJrZXkiOiAiZmFrZSJ9
+          project_id: example-project
+
+      - name: Assert client-secret.json was written
+        run: |
+          if [ ! -f "./client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists"
+
+      - name: Assert app.yaml still exists
+        run: |
+          if [ ! -f "./app.yaml" ]; then
+            echo "FAIL: app.yaml not found"
+            exit 1
+          fi
+          echo "PASS: app.yaml exists"
