@@ -1,0 +1,14 @@
+{
+  "status": "unbundlable",
+  "entries": [
+    {
+      "path": "index.js",
+      "status": "unbundlable",
+      "reason": "indirect-require: Indirect calls to \"require\" will not be bundled",
+      "warnings": [
+        "indirect-require: Indirect calls to \"require\" will not be bundled",
+        "indirect-require: Indirect calls to \"require\" will not be bundled"
+      ]
+    }
+  ]
+}

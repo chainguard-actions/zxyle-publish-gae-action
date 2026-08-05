@@ -1,0 +1,71 @@
+name: Test custom gae_config_path input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a custom app.yaml at a non-default path
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/myapp"
+          cat > "$GITHUB_WORKSPACE/myapp/app.yaml" <<'EOF'
+          runtime: python39
+          service: myservice
+          env_variables:
+            CUSTOM_PATH_VAR: custom_path_value
+          EOF
+
+      - name: Prepare inputs
+        id: prep
+        run: |
+          # Fake service account key (base64)
+          FAKE_KEY='{"type":"service_account","project_id":"custom-project","private_key_id":"key456","client_email":"custom@custom-project.iam.gserviceaccount.com"}'
+          ENCODED_KEY=$(echo -n "$FAKE_KEY" | base64 -w 0)
+          echo "encoded_key=$ENCODED_KEY" >> $GITHUB_OUTPUT
+
+          # GAE variables to merge into the custom config
+          GAE_VARS='{"env_variables":{"INJECTED_VAR":"injected_value"}}'
+          ENCODED_VARS=$(echo -n "$GAE_VARS" | base64 -w 0)
+          echo "encoded_vars=$ENCODED_VARS" >> $GITHUB_OUTPUT
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: custom@custom-project.iam.gserviceaccount.com
+          service_account_key: ${{ steps.prep.outputs.encoded_key }}
+          project_id: custom-project
+          gae_variables: ${{ steps.prep.outputs.encoded_vars }}
+          gae_config_path: ./myapp/app.yaml
+
+      - name: Assert custom app.yaml was updated with injected variable
+        run: |
+          CONTENT=$(cat "$GITHUB_WORKSPACE/myapp/app.yaml")
+          echo "custom app.yaml content:"
+          echo "$CONTENT"
+
+          if echo "$CONTENT" | grep -q "INJECTED_VAR"; then
+            echo "PASS: INJECTED_VAR found in custom app.yaml"
+          else
+            echo "FAIL: INJECTED_VAR not found in custom app.yaml after merge"
+            exit 1
+          fi
+
+      - name: Assert original variables are preserved in custom config
+        run: |
+          CONTENT=$(cat "$GITHUB_WORKSPACE/myapp/app.yaml")
+          if echo "$CONTENT" | grep -q "CUSTOM_PATH_VAR"; then
+            echo "PASS: CUSTOM_PATH_VAR preserved in custom app.yaml"
+          else
+            echo "FAIL: CUSTOM_PATH_VAR was lost after merge"
+            exit 1
+          fi
+
+      - name: Assert client-secret.json was written
+        run: |
+          if [ ! -f "$GITHUB_WORKSPACE/client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists"

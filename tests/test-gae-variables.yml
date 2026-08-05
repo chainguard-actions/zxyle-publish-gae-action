@@ -1,0 +1,68 @@
+name: Test gae_variables merging into app.yaml
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create a minimal app.yaml in workspace root
+        run: |
+          cat > "$GITHUB_WORKSPACE/app.yaml" <<'EOF'
+          runtime: nodejs14
+          service: default
+          env_variables:
+            EXISTING_VAR: existing_value
+          EOF
+
+      - name: Prepare inputs
+        id: prep
+        run: |
+          # Fake service account key (base64)
+          FAKE_KEY='{"type":"service_account","project_id":"test-project","private_key_id":"key123","client_email":"test@test-project.iam.gserviceaccount.com"}'
+          ENCODED_KEY=$(echo -n "$FAKE_KEY" | base64 -w 0)
+          echo "encoded_key=$ENCODED_KEY" >> $GITHUB_OUTPUT
+
+          # GAE variables to merge: add a new env variable
+          GAE_VARS='{"env_variables":{"NEW_VAR":"new_value","DB_HOST":"localhost"}}'
+          ENCODED_VARS=$(echo -n "$GAE_VARS" | base64 -w 0)
+          echo "encoded_vars=$ENCODED_VARS" >> $GITHUB_OUTPUT
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: test@test-project.iam.gserviceaccount.com
+          service_account_key: ${{ steps.prep.outputs.encoded_key }}
+          project_id: test-project
+          gae_variables: ${{ steps.prep.outputs.encoded_vars }}
+
+      - name: Assert app.yaml was updated with new variables
+        run: |
+          CONTENT=$(cat "$GITHUB_WORKSPACE/app.yaml")
+          echo "app.yaml content:"
+          echo "$CONTENT"
+
+          if echo "$CONTENT" | grep -q "NEW_VAR"; then
+            echo "PASS: NEW_VAR found in app.yaml"
+          else
+            echo "FAIL: NEW_VAR not found in app.yaml after merge"
+            exit 1
+          fi
+
+          if echo "$CONTENT" | grep -q "DB_HOST"; then
+            echo "PASS: DB_HOST found in app.yaml"
+          else
+            echo "FAIL: DB_HOST not found in app.yaml after merge"
+            exit 1
+          fi
+
+      - name: Assert existing variables are preserved
+        run: |
+          CONTENT=$(cat "$GITHUB_WORKSPACE/app.yaml")
+          if echo "$CONTENT" | grep -q "EXISTING_VAR"; then
+            echo "PASS: EXISTING_VAR preserved in app.yaml"
+          else
+            echo "FAIL: EXISTING_VAR was lost after merge"
+            exit 1
+          fi
