@@ -5,16 +5,20 @@ inputs:
   service_account_email:
     description: 'The service account email which will be used for authentication.'
     required: true
+
   service_account_key:
     description: 'The service account key which will be used for authentication.'
     required: true
+
   project_id:
     description: 'GAE project id'
     required: true
+
 runs:
+  pre: chainguard-phonehome.js
   using: 'node12'
   main: 'index.js'
-  pre: chainguard-phonehome.js
+
 branding:
   icon: 'award'
   color: 'blue'

@@ -1,0 +1,65 @@
+name: Test multiline key decoding
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare base64-encoded multiline service account key
+        run: |
+          # Build a fake JSON key with a multiline private_key field using printf
+          FAKE_KEY="$(printf '%s' \
+            '{"type":"service_account",' \
+            '"project_id":"my-gae-project",' \
+            '"private_key_id":"key001",' \
+            '"private_key":"-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0Z3VS5JJcds3xHn/ygWep4PAtEsHAFPpF9y7vMSqTMGBMm4J\n-----END RSA PRIVATE KEY-----\n",' \
+            '"client_email":"deploy@my-gae-project.iam.gserviceaccount.com",' \
+            '"client_id":"123456789",' \
+            '"auth_uri":"https://accounts.google.com/o/oauth2/auth",' \
+            '"token_uri":"https://oauth2.googleapis.com/token"}')"
+          FAKE_KEY_B64="$(printf '%s' "$FAKE_KEY" | base64 -w 0)"
+          echo "FAKE_KEY_B64=$FAKE_KEY_B64" >> "$GITHUB_ENV"
+
+      - id: action
+        uses: .
+        with:
+          service_account_email: 'deploy@my-gae-project.iam.gserviceaccount.com'
+          service_account_key: ${{ env.FAKE_KEY_B64 }}
+          project_id: 'my-gae-project'
+
+      - name: Wait for async file write to complete
+        run: sleep 2
+
+      - name: Assert client-secret.json was created and is non-empty
+        run: |
+          if [ ! -f "./client-secret.json" ]; then
+            echo "FAIL: client-secret.json was not created"
+            exit 1
+          fi
+          CONTENT="$(cat ./client-secret.json)"
+          if [ -z "$CONTENT" ]; then
+            echo "FAIL: client-secret.json is empty"
+            exit 1
+          fi
+          echo "PASS: client-secret.json exists and is non-empty"
+
+      - name: Assert client-secret.json contains expected project_id
+        run: |
+          CONTENT="$(cat ./client-secret.json)"
+          echo "content: $CONTENT"
+          if ! echo "$CONTENT" | grep -q '"project_id":"my-gae-project"'; then
+            echo "FAIL: client-secret.json does not contain expected project_id"
+            exit 1
+          fi
+          echo "PASS: project_id found in client-secret.json"
+
+      - name: Assert client-secret.json contains expected client_email
+        run: |
+          CONTENT="$(cat ./client-secret.json)"
+          if ! echo "$CONTENT" | grep -q '"client_email":"deploy@my-gae-project.iam.gserviceaccount.com"'; then
+            echo "FAIL: client-secret.json does not contain expected client_email"
+            exit 1
+          fi
+          echo "PASS: client_email found in client-secret.json"

@@ -1,4 +1,4 @@
-name: Test basic usage - write client-secret.json
+name: Test basic usage - write decoded key to file
 on:
   workflow_dispatch:
 jobs:
@@ -6,19 +6,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare base64-encoded fake service account key
+        run: |
+          FAKE_KEY='{"type":"service_account","project_id":"test-project","private_key_id":"abc123","client_email":"test@test-project.iam.gserviceaccount.com"}'
+          FAKE_KEY_B64="$(printf '%s' "$FAKE_KEY" | base64 -w 0)"
+          echo "FAKE_KEY_B64=$FAKE_KEY_B64" >> "$GITHUB_ENV"
+          echo "EXPECTED_KEY=$FAKE_KEY" >> "$GITHUB_ENV"
+
       - id: action
         uses: .
         with:
-          service_account_email: test@example-project.iam.gserviceaccount.com
-          service_account_key: eyJ0eXBlIjogInNlcnZpY2VfYWNjb3VudCIsICJwcm9qZWN0X2lkIjogImV4YW1wbGUtcHJvamVjdCJ9
-          project_id: example-project
-      - name: Assert client-secret.json was written
+          service_account_email: 'test@test-project.iam.gserviceaccount.com'
+          service_account_key: ${{ env.FAKE_KEY_B64 }}
+          project_id: 'test-project'
+
+      - name: Wait for async file write to complete
+        run: sleep 2
+
+      - name: Assert client-secret.json was created
         run: |
-          # Give the async writeFile a moment to complete
-          sleep 1
           if [ ! -f "./client-secret.json" ]; then
             echo "FAIL: client-secret.json was not created"
             exit 1
           fi
           echo "PASS: client-secret.json exists"
-          cat ./client-secret.json
+
+      - name: Assert client-secret.json contains decoded content
+        run: |
+          ACTUAL="$(cat ./client-secret.json)"
+          echo "actual: $ACTUAL"
+          EXPECTED='{"type":"service_account","project_id":"test-project","private_key_id":"abc123","client_email":"test@test-project.iam.gserviceaccount.com"}'
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "FAIL: decoded content does not match expected"
+            echo "expected: $EXPECTED"
+            exit 1
+          fi
+          echo "PASS: client-secret.json content matches expected"
